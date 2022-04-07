@@ -16,6 +16,7 @@
 
 <table>
     <?
+    print_r($arResult);
     $counter = 1;
     foreach ($component->order->getBasket() as $item):
         /**
@@ -27,10 +28,10 @@
                 <span class="basket-data__number"><?= $counter++ ?></span>
             </td>
             <td class="basket-data__td basket-data__td-img">
-                <!--				--><?//
-                //				if (!empty($item->getPicture())): ?>
-                <!--					<img src="--><?//= $item->getPictureResized(['width' => 200, 'height' => 200])['SRC'] ?><!--" class="basket-data__img" alt="">-->
-                <!--				--><?// endif; ?>
+<!--                --><?//
+//                if (!empty($item->getPicture())): ?>
+<!--                    <img src="--><?//= $item->getPictureResized(['width' => 200, 'height' => 200])['SRC'] ?><!--" class="basket-data__img" alt="">-->
+<!--                --><?// endif; ?>
             </td>
             <td class="basket-data__td">
                 <span class="basket-data__product-title"><?= $item->getField('NAME') ?></span>
@@ -83,3 +84,89 @@
             </div>
         </div>
     <? endif; ?>
+
+
+    <?$addressProp = $component->getPropByCode('ADDRESS');
+if (is_object($addressProp)):
+	?>
+	<div class="check__content-row">
+		<div class="check__content-label">
+			<?= $addressProp->getName() ?>:
+		</div>
+		<div class="check__content-value">
+			<a href="javascript:;" class="check__content-link">
+				<?= $addressProp->getViewHtml() ?>
+			</a>
+		</div>
+	</div>
+<? endif; ?>
+
+    <div class="check__content-row">
+        <div class="check__content-label">
+            <?= $component->getPropDataByCode('PHONE')['NAME'] ?>:
+        </div>
+        <div class="check__content-value">
+            <a href="javascript:;" class="check__content-link">
+                <?= $component->getPropDataByCode('PHONE')['VALUE'] ?>
+            </a>
+        </div>
+    </div>
+
+
+
+    <?echo \SaleFormatCurrency(
+        $component->order->getPrice(),
+        $component->order->getCurrency()
+    ) ?>
+
+    <br>
+
+
+    <?echo \SaleFormatCurrency(
+        $component->order->getDeliveryPrice(),
+        $component->order->getCurrency()
+    ) ?>
+
+   <br>
+   <br>
+
+    <?$shipment = false;
+    /** @var \Bitrix\Sale\Shipment $shipmentItem */
+    foreach ($component->order->getShipmentCollection() as $shipmentItem) {
+        if (!$shipmentItem->isSystem()) {
+            $shipment = $shipmentItem;
+            break;
+        }
+    }
+    if ($shipment) :
+        ?>
+        <?= $shipment->getDelivery()->getName() ?>
+    <? else:?>
+        Самовывоз
+    <? endif; ?>
+    <br>
+
+
+<? foreach ($component->order->getPaymentCollection() as $payment):
+    /**
+     * @var \Bitrix\Sale\Payment $payment
+     */
+    ?>
+    <?= $payment->getPaymentSystemName() ?>
+<? endforeach; ?>
+
+    Выберите службу доставки:<br>
+    <?foreach ($component->order->getAvailableDeliveries() as $obDelivery):?>
+        <label>
+            <input type="radio" name="delivery_id" value=<?=$obDelivery->getId()?>>
+            <?=$obDelivery->getName()?>
+        </label>
+    <? endforeach; ?>
+
+    Выберите платежную систему:<br>
+    <?foreach ($component->order->getAvailablePaySystems() as $arPaySystem):?>
+        <label>
+            <input type="radio" name="payment_id" value=<?=$arPaySystem['ID']?>>
+            <?=$arPaySystem['NAME']?>
+        </label>
+    <? endforeach; ?>

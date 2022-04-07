@@ -2,9 +2,13 @@
 if (!defined("B_PROLOG_INCLUDED") || B_PROLOG_INCLUDED !== true) {
     die();
 }
+require_once (__DIR__ . '/classes/Basket.php');
+require_once (__DIR__ . '/classes/BasketItem.php');
+require_once (__DIR__ . '/classes/Order.php');
 
 use \Bitrix\Main\Localization\Loc;
 use \Bitrix\Main\Loader;
+use \Bitrix\Sale\Registry;
 
 class customOrderComponent extends CBitrixComponent
 {
@@ -12,6 +16,8 @@ class customOrderComponent extends CBitrixComponent
      * @var \Bitrix\Sale\Order
      */
     public $order;
+
+    public $propMap = [];
 
     protected $errors = [];
 
@@ -40,6 +46,20 @@ class customOrderComponent extends CBitrixComponent
             }
         }
 
+        if (isset($arParams['IS_AJAX'])
+            && ($arParams['IS_AJAX'] == 'Y' || $arParams['IS_AJAX'] == 'N')) {
+            $arParams['IS_AJAX'] = $arParams['IS_AJAX'] == 'Y';
+        } else {
+            if (
+                isset($this->request['is_ajax'])
+                && ($this->request['is_ajax'] == 'Y' || $this->request['is_ajax'] == 'N')
+            ) {
+                $arParams['IS_AJAX'] = $this->request['is_ajax'] == 'Y';
+            } else {
+                $arParams['IS_AJAX'] = false;
+            }
+        }
+
         return $arParams;
     }
 
@@ -47,7 +67,18 @@ class customOrderComponent extends CBitrixComponent
     {
         global $USER;
 
+        // помена крзины
+        $registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+        $registry->set(Registry::ENTITY_BASKET, '\Local\Sale\Basket');
+        $registry->set(Registry::ENTITY_BASKET_ITEM, '\Local\Sale\BasketItem');
+
+        // помена класса заказа
+        $registry = Registry::getInstance(Registry::REGISTRY_TYPE_ORDER);
+        $registry->set(Registry::ENTITY_ORDER, '\Local\Sale\Order');
+
         try {
+
+
             $siteId = \Bitrix\Main\Context::getCurrent()->getSite();
             $basketItems = \Bitrix\Sale\Basket::loadItemsForFUser(
                 \CSaleBasket::GetBasketUserID(),
@@ -110,11 +141,50 @@ class customOrderComponent extends CBitrixComponent
             $this->errors[] = $e->getMessage();
         }
     }
+    public function getPropByCode($code)
+    {
+        $result = false;
+
+        $propId = 0;
+        if (isset($this->propMap[$code])) {
+            $propId = $this->propMap[$code];
+        }
+
+        if ($propId > 0) {
+            $result = $this->order
+                ->getPropertyCollection()
+                ->getItemByOrderPropertyId($propId);
+        }
+
+        return $result;
+    }
+
+    public function getPropDataByCode($code)
+    {
+        $result = [];
+
+        $propId = 0;
+        if (isset($this->propMap[$code])) {
+            $propId = $this->propMap[$code];
+        }
+
+        if ($propId > 0) {
+            $result = $this->order
+                ->getPropertyCollection()
+                ->getItemByOrderPropertyId($propId)
+                ->getFieldValues();
+        }
+
+        return $result;
+    }
+
     protected function setOrderProps()
     {
         global $USER;
         $arUser = $USER->GetByID(intval($USER->GetID()))
             ->Fetch();
+
+
 
         if (is_array($arUser)) {
             $fio = $arUser['LAST_NAME'] . ' ' . $arUser['NAME'] . ' ' . $arUser['SECOND_NAME'];
@@ -122,8 +192,10 @@ class customOrderComponent extends CBitrixComponent
             $arUser['FIO'] = $fio;
         }
 
+
         foreach ($this->order->getPropertyCollection() as $prop) {
             /** @var \Bitrix\Sale\PropertyValue $prop */
+            $this->propMap[$prop->getField('CODE')] = $prop->getPropertyId();
             $value = '';
 
             switch ($prop->getField('CODE')) {
@@ -161,13 +233,35 @@ class customOrderComponent extends CBitrixComponent
 
     function executeComponent()
     {
+        global $APPLICATION;
+
+        if ($this->arParams['IS_AJAX']) {
+            $APPLICATION->RestartBuffer();
+        }
+
         $this->createVirtualOrder();
+
         if (isset($this->request['save']) && $this->request['save'] == 'Y') {
             $this->order->save();
         }
 
-        $this->includeComponentTemplate();
+        if ($this->arParams['IS_AJAX']) {
+            if ($this->getTemplateName() != '') {
+                ob_start();
+                $this->includeComponentTemplate();
+                $this->arResponse['html'] = ob_get_contents();
+                ob_end_clean();
+            }
 
+            $this->arResponse['errors'] = $this->errors;
+
+            header('Content-Type: application/json');
+            echo json_encode($this->arResponse);
+            $APPLICATION->FinalActions();
+            die();
+        } else {
+            $this->includeComponentTemplate();
+        }
     }
 
 }
