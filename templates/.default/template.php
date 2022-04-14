@@ -16,7 +16,6 @@
 
 <table>
     <?
-    print_r($component->getPriceDelivery());
 
     $counter = 1;
     foreach ($component->order->getBasket() as $item):
